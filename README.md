@@ -47,7 +47,10 @@ ai-infra-lab/
 │   └── cuda_check.cu
 │
 ├── 04-pytorch-gpu/
-│   └── ...
+│   ├── check_torch.py
+│   ├── tensor_device.py
+│   ├── matmul_benchmark.py
+│   └── precision_benchmark.py
 │
 ├── 05-model-gpu/
 │   └── ...
@@ -112,6 +115,125 @@ Compute Capability: 8.6
 ```
 
 具体版本以实际环境为准。
+
+### 04 - PyTorch on GPU
+
+对应博客：
+
+《从零搭建一个 AI Infra 实验室④：第一次让 PyTorch 跑在 GPU 上》
+
+这一阶段第一次从 CUDA 软件栈进入 PyTorch Framework，主要实验：
+
+- 检查 PyTorch 是否能够使用 CUDA GPU
+- 理解 Tensor 的 `shape`、`dtype` 和 `device`
+- 验证 CPU Tensor → GPU Tensor 的数据搬运
+- 对比 CPU / GPU 矩阵乘法性能
+- 观察 GPU 显存占用和利用率
+- 对比 FP32 / FP16 / BF16 的显存与计算表现
+
+核心数据路径：
+
+```text
+CPU Tensor
+System RAM
+     │
+     │ .to("cuda")
+     ▼
+   PCIe
+     │
+     ▼
+GPU Tensor
+GPU VRAM
+     │
+     ▼
+PyTorch / CUDA / cuBLAS
+     │
+     ▼
+GPU Compute
+```
+
+实验代码：
+
+#### check_torch.py
+
+检查 PyTorch、CUDA 和 GPU 环境：
+
+```bash
+python 04-pytorch-gpu/check_torch.py
+```
+
+主要输出：
+
+- PyTorch Version
+- PyTorch CUDA Version
+- CUDA Available
+- GPU Name
+- Compute Capability
+- BF16 Support
+
+#### tensor_device.py
+
+观察 Tensor 从 CPU 内存进入 GPU 显存：
+
+```bash
+python 04-pytorch-gpu/tensor_device.py
+```
+
+重点观察：
+
+```text
+device=cpu
+    ↓
+.to("cuda")
+    ↓
+device=cuda:0
+```
+
+运行时可以在另一个终端观察 GPU：
+
+```bash
+watch -n 0.5 nvidia-smi
+```
+
+#### matmul_benchmark.py
+
+对比 CPU 和 GPU 的矩阵乘法性能：
+
+```bash
+python 04-pytorch-gpu/matmul_benchmark.py
+```
+
+实验重点：
+
+- CPU vs GPU Matrix Multiplication
+- GPU 对大规模并行计算的优势
+- 小矩阵下 GPU Launch Overhead
+- CUDA 异步执行与 torch.cuda.synchronize()
+
+#### precision_benchmark.py
+
+对比不同浮点精度：
+
+```bash
+python 04-pytorch-gpu/precision_benchmark.py
+```
+
+主要观察：
+
+```text
+FP32 = 4 Bytes / element
+FP16 = 2 Bytes / element
+BF16 = 2 Bytes / element
+```
+
+并比较：
+
+- Tensor Size
+- GPU Memory
+- Matrix Multiplication Time
+- FP32 / FP16 / BF16 的实际表现
+
+具体性能数据与 CUDA / PyTorch 版本以实际实验环境为准。
 
 ## About
 
