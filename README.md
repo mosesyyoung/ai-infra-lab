@@ -53,7 +53,9 @@ ai-infra-lab/
 │   └── precision_benchmark.py
 │
 ├── 05-model-gpu/
-│   └── ...
+│   ├── tokenizer_test.py
+│   └── load_model.py
+│
 ```
 
 ### 03 - CUDA Stack
@@ -234,6 +236,176 @@ BF16 = 2 Bytes / element
 - FP32 / FP16 / BF16 的实际表现
 
 具体性能数据与 CUDA / PyTorch 版本以实际实验环境为准。
+
+### 05 - LLM Model on GPU
+
+对应博客：
+
+《从零搭建一个 AI Infra 实验室⑤：从 Infra 角度看懂一个 LLM 到底是什么》
+
+这一阶段从 PyTorch Tensor 进一步进入真正的 LLM Model，主要理解：
+
+- Parameter、Weight 与 Model 的关系
+- 0.5B / 7B 等模型规模代表什么
+- Parameter Count、dtype 与模型内存占用的关系
+- Transformer 在 LLM 中的位置
+- Tokenizer、Token、Prompt 和 Context
+- 模型文件如何加载到 System RAM
+- PyTorch Model 如何进一步进入 GPU VRAM
+
+实验模型：
+
+```text
+Qwen/Qwen2.5-0.5B-Instruct
+```
+
+核心模型加载路径：
+
+```text
+Model Repository
+      ↓
+Model Files
+      ↓
+System RAM
+      ↓
+PyTorch Model
+      ↓
+model.to("cuda")
+      ↓
+GPU VRAM 
+```
+
+一个模型的参数显存可以粗略理解为：
+
+```text
+Parameter Memory
+≈
+Parameter Count × dtype size
+```
+
+例如：
+
+```text
+FP32 = 4 Bytes / parameter
+FP16 = 2 Bytes / parameter
+BF16 = 2 Bytes / parameter
+```
+
+因此：
+
+```text
+0.5B × FP16 ≈ 1 GB
+7B   × FP16 ≈ 14 GB
+```
+
+这里计算的是模型参数本身的近似占用，实际推理还会产生其他显存开销。
+
+#### tokenizer_test.py
+
+观察文本如何被 Tokenizer 转换为 Token 和 Token ID：
+
+```bash
+python 05-model-gpu/tokenizer_test.py
+```
+
+核心数据路径：
+
+```text
+Text
+ ↓
+Tokenizer
+ ↓
+Token
+ ↓
+Token ID
+ ↓
+Model Input
+```
+
+#### load_model.py
+
+使用 Transformers 加载模型，并观察模型从 CPU RAM 进入 GPU VRAM：
+
+```bash
+python 05-model-gpu/load_model.py
+```
+
+重点观察：
+
+- Parameter Count
+- Parameter Memory
+- Model dtype
+- Model device
+- torch.cuda.memory_allocated()
+- torch.cuda.memory_reserved()
+- nvidia-smi
+
+模型首先加载到：
+
+```text
+System RAM
+```
+
+此时：
+
+```text
+Model device: cpu
+```
+
+执行：
+
+```text
+model.to("cuda")
+```
+
+之后，大量 Parameter Tensor 会被搬入 GPU VRAM：
+
+```text
+Model device: cuda:0
+```
+
+可以在另一个终端同时观察：
+
+```bash
+watch -n 0.5 nvidia-smi
+```
+
+#### Wi-Fi Power Save
+
+如果实验机通过 Wi-Fi 联网，持续下载较大的模型文件时遇到 SSH 连接异常，可以检查：
+
+```bash
+iw dev wlp2s0 get power_save
+```
+
+临时关闭：
+
+```bash
+sudo iw dev wlp2s0 set power_save off
+```
+
+如果关闭后恢复稳定，可以再根据自己的网络环境配置为永久关闭。
+
+这一问题与模型或 PyTorch 本身无直接关系，但持续下载模型文件可能会暴露原本不明显的网络稳定性问题。
+
+下一阶段将进一步观察一次 LLM 推理请求内部发生的事情：
+
+```text
+Prompt
+ ↓
+Tokenizer
+ ↓
+Context
+ ↓
+Prefill
+ ↓
+KV Cache
+ ↓
+Decode
+ ↓
+Output Token
+```
+
 
 ## About
 
