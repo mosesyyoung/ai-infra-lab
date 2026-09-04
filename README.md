@@ -25,6 +25,12 @@ PyTorch
  ↓
 Model
  ↓
+LLM Inference
+ ↓
+Quantization
+ ↓
+llama.cpp / Ollama
+ ↓
 vLLM
  ↓
 Docker
@@ -55,6 +61,11 @@ ai-infra-lab/
 ├── 05-model-gpu/
 │   ├── tokenizer_test.py
 │   └── load_model.py
+│
+├── 06-llm-inference/
+│   ├── chat_template_test.py
+│   ├── generate_test.py
+│   └── prompt_length_test.py
 │
 ```
 
@@ -393,19 +404,254 @@ sudo iw dev wlp2s0 set power_save off
 ```text
 Prompt
  ↓
+Chat Template
+ ↓
 Tokenizer
  ↓
 Context
  ↓
 Prefill
- ↓
-KV Cache
- ↓
-Decode
- ↓
-Output Token
+ ├── Build KV Cache
+ └── Output Token 1
+          ↓
+       Decode
+          ↓
+   Update KV Cache
+          ↓
+   Next Output Token
 ```
 
+### 06 - LLM Inference
+
+对应博客：
+
+《从零搭建一个 AI Infra 实验室⑥：一次 LLM 推理到底发生了什么——从 Prompt 到 Prefill、Decode》
+
+这一阶段从“模型如何进入 GPU”进一步进入真正的 LLM Inference，主要理解：
+
+- Prompt 如何通过 Chat Template 变成模型熟悉的对话格式
+- Tokenizer 如何产生 Input Tokens
+- Context 到底包含什么
+- 真正调用 `model.generate()`
+- 为什么 LLM 会一个 Token 一个 Token 地生成
+- Prefill 与 Decode 为什么是两种不同的 workload
+- KV Cache 为什么能够避免重复计算历史 Token
+- Input / Output Token 数如何影响推理
+- Short Prompt 与 Long Prompt 的推理差异
+- 推理过程中 GPU 显存如何变化
+
+实验模型：
+
+```text
+Qwen/Qwen2.5-0.5B-Instruct
+```
+
+一次 LLM 请求的核心路径：
+
+```text
+User Prompt
+     ↓
+Chat Template
+     ↓
+Tokenizer
+     ↓
+Input Tokens
+     ↓
+Context
+     ↓
+Prefill
+     │
+     ├── Build KV Cache
+     └── Predict Output Token 1
+                  ↓
+               Decode
+                  ↓
+          Update KV Cache
+                  ↓
+         Predict Next Token
+                  ↓
+                 ...
+                  ↓
+            Output Tokens
+                  ↓
+               Answer
+```
+
+Prefill and Decode
+
+Prefill 首先处理整个已有 Context：
+
+```text
+Prompt Tokens
+      ↓
+   Prefill
+      ↓
+Build KV Cache
+      ↓
+Output Token 1
+```
+
+随后进入自回归 Decode。
+
+每一步只处理一个新的 Token：
+
+```text
+New Token
+   ↓
+Q / K / V
+   │
+   ├── Q → 当前 Attention 使用
+   │
+   ├── K → append to K Cache
+   │
+   └── V → append to V Cache
+   ↓
+Predict Next Token
+```
+
+因此正常使用 KV Cache 时，并不会为每个 Output Token 重新执行整个 Prompt 的 Prefill。
+
+KV Cache 保存的是 Transformer 各层历史 Token 的 Key / Value Tensor，而不是文本或 Token ID。
+
+可以粗略理解为：
+
+```text
+Q = 当前 Token 想寻找什么
+K = 历史 Token 可以如何被匹配
+V = 被关注后真正提供的信息
+```
+
+历史 K / V 会被后续 Decode Step 反复使用，因此需要缓存；Q 只服务于当前 Attention Step，通常不会长期保存。
+
+#### chat_template_test.py
+
+观察聊天消息如何被 Chat Template 转换成模型训练时熟悉的 Prompt 格式：
+
+```bash
+python 06-llm-inference/chat_template_test.py
+```
+
+核心路径：
+
+```text
+Messages
+   ↓
+Chat Template
+   ↓
+Formatted Prompt
+```
+
+重点理解：
+
+```text
+system
+user
+assistant
+```
+
+等角色信息并不是模型天然理解的，而是通过模型自己的 Chat Template 编码到输入序列中。
+
+#### generate_test.py
+
+真正执行一次 LLM 推理：
+
+```bash
+python 06-llm-inference/generate_test.py
+```
+
+核心调用：
+
+```text
+model.generate(...)
+```
+
+重点观察：
+
+- Input Tokens
+- Output Tokens
+- Generated Answer
+- 自回归生成过程
+
+从 Infra 角度，可以把 model.generate() 背后的过程理解为：
+
+```text
+Input Tokens
+     ↓
+Prefill
+     ↓
+KV Cache
+     ↓
+Autoregressive Decode
+     ↓
+Output Tokens
+```
+
+#### prompt_length_test.py
+
+比较 Short Prompt 与 Long Prompt：
+
+```bash
+python 06-llm-inference/prompt_length_test.py
+```
+
+重点记录：
+
+- Input Tokens
+- Output Tokens
+- Generate Time
+- GPU Memory Allocated
+- GPU Memory Reserved
+- Peak GPU Memory
+
+可以同时在另一个终端观察 GPU：
+
+```bash
+watch -n 0.5 nvidia-smi
+```
+
+实验主要观察下面这条关系：
+
+```text
+Longer Prompt
+      ↓
+More Input Tokens
+      ↓
+Larger Context
+      ↓
+More Prefill Work
+      ↓
+Larger KV Cache
+      ↓
+Higher Latency / Memory Pressure
+```
+
+这里的 Generate Time 是整个 model.generate() 的总耗时，包括 Prefill、Decode 和部分 Framework 开销，并不等于严格意义上的 TTFT。
+
+后续进入推理引擎时，再进一步观察：
+
+```text
+TTFT
+TPOT
+Throughput
+Batching
+KV Cache Management
+```
+
+下一阶段将继续研究一个非常现实的问题：
+
+```text
+12GB VRAM
+     ↓
+FP16 / BF16
+     ↓
+INT8
+     ↓
+INT4
+     ↓
+Quantization
+     ↓
+How Large a Model Can We Run?
+```
 
 ## About
 
