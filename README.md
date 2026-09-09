@@ -67,6 +67,9 @@ ai-infra-lab/
 │   ├── generate_test.py
 │   └── prompt_length_test.py
 │
+├── 07-quantization/
+│   └── quant_vram_test.py
+│
 ```
 
 ### 03 - CUDA Stack
@@ -652,6 +655,225 @@ Quantization
      ↓
 How Large a Model Can We Run?
 ```
+
+### 07 - LLM Quantization
+
+对应博客：
+
+《从零搭建一个 AI Infra 实验室⑦：12GB 显存到底能跑多大模型——模型精度与量化》
+
+这一阶段从 LLM Inference 进一步进入模型显存容量与 Quantization，主要理解：
+
+- Parameter Count 与 Model Weight Size 的关系
+- FP32 / FP16 / BF16 / INT8 / INT4 的存储差异
+- Quantization 为什么能够降低模型显存占用
+- Scale、Zero Point 和 Group Quantization
+- BitsAndBytes INT8 / INT4
+- AWQ 与 GPTQ 预量化模型
+- Model Weight Size 与实际 GPU VRAM Usage 的区别
+- Model Fits 与 Serving Fits 的区别
+
+实验模型：
+
+```text
+Qwen/Qwen2.5-7B-Instruct
+Qwen/Qwen2.5-7B-Instruct-AWQ
+Qwen/Qwen2.5-7B-Instruct-GPTQ-Int4
+```
+
+模型 Weight 可以粗略估算为：
+
+```text
+Weight Size
+≈
+Parameter Count
+×
+Bytes Per Parameter
+```
+
+例如对于 7B Model：
+
+```text
+BF16 / FP16
+≈ 7B × 2 Bytes
+≈ 14GB
+
+INT8
+≈ 7B × 1 Byte
+≈ 7GB
+
+INT4
+≈ 7B × 0.5 Byte
+≈ 3.5GB
+```
+
+这里计算的只是理论 Model Weight Size。
+
+真正运行模型时，GPU VRAM 还包括：
+
+```text
+GPU VRAM
+   │
+   ├── Model Weights
+   ├── KV Cache
+   ├── Activations
+   ├── Runtime Buffers
+   └── CUDA / Framework Overhead
+```
+
+因此：
+
+```text
+Model Weight Size
+≠
+GPU VRAM Usage
+```
+
+#### quant_vram_test.py
+
+使用同一个测试程序比较五种模型加载方式：
+
+```text
+BF16
+INT8
+BNB INT4
+AWQ INT4
+GPTQ INT4
+```
+
+运行：
+
+```bash
+HF_HUB_OFFLINE=1 python 07-quantization/quant_vram_test.py bf16
+HF_HUB_OFFLINE=1 python 07-quantization/quant_vram_test.py int8
+HF_HUB_OFFLINE=1 python 07-quantization/quant_vram_test.py int4
+HF_HUB_OFFLINE=1 python 07-quantization/quant_vram_test.py awq
+HF_HUB_OFFLINE=1 python 07-quantization/quant_vram_test.py gptq
+```
+
+实验故意使用：
+
+```python
+device_map={"": 0}
+```
+
+要求模型完整进入 GPU 0，避免 device_map="auto" 自动把部分 Weight Offload 到 CPU，从而影响显存容量实验。
+
+程序主要记录：
+
+```text
+Load Time
+Model Footprint
+CUDA Memory Allocated
+CUDA Memory Reserved
+Peak VRAM
+Input Tokens
+Output Tokens
+Generate Time
+```
+
+可以同时使用：
+
+```bash
+watch -n 0.5 nvidia-smi
+```
+
+观察实际 GPU Process Memory。
+
+#### Download Models First
+
+为了避免模型下载过程干扰显存实验，先使用 hf download 把模型下载到 Hugging Face Cache：
+
+```bash
+export HF_HUB_DOWNLOAD_TIMEOUT=120
+export HF_HUB_DISABLE_XET=1
+
+hf download Qwen/Qwen2.5-7B-Instruct
+hf download Qwen/Qwen2.5-7B-Instruct-AWQ
+hf download Qwen/Qwen2.5-7B-Instruct-GPTQ-Int4
+```
+
+然后在实验阶段使用：
+
+```bash
+HF_HUB_OFFLINE=1
+local_files_only=True
+```
+
+完全离线加载模型。
+
+本机实验中使用默认 Xet 下载路径时曾出现系统异常，因此关闭：
+
+```bash
+export HF_HUB_DISABLE_XET=1
+```
+
+后续下载可以正常 Resume 并完成。
+
+这一现象仅代表当前实验环境，不意味着 Xet 在其他环境中存在相同问题。
+
+#### AWQ / GPTQ Runtime
+
+AWQ / GPTQ 是预量化模型，与 BitsAndBytes 加载时量化不同。
+
+当前实验环境额外使用：
+
+```text
+gptqmodel
+torchvision
+optimum
+```
+
+实际依赖与版本可能随 Transformers Quantization Backend 更新而变化，因此应以实验时的官方文档和当前 Python Environment 为准。
+
+这一阶段最终建立下面这条关系：
+
+```text
+Parameter Count
+       ↓
+Precision / Quantization
+       ↓
+Model Weight Size
+       ↓
+GPU VRAM
+```
+
+对于 RTX 3060 12GB：
+
+```text
+7B BF16
+→ Weight 本身已经接近或超过显存容量
+
+7B INT8
+→ 开始进入合理范围
+
+7B INT4
+→ 留出明显更多显存空间
+```
+
+但：
+
+```text
+Model Fits
+≠
+Serving Fits
+```
+
+长 Context 和更高并发仍然会继续增加 KV Cache 等显存开销。
+
+下一阶段将进入：
+
+```text
+GGUF
+ ↓
+llama.cpp
+ ↓
+CPU / GPU Offload
+ ↓
+Ollama
+```
+
+研究真正负责运行本地模型的 Inference Engine。
 
 ## About
 
