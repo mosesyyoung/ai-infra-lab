@@ -70,6 +70,11 @@ ai-infra-lab/
 ├── 07-quantization/
 │   └── quant_vram_test.py
 │
+├── 09-vllm-serving/
+│   ├── start_server.sh
+│   ├── curl_chat.sh
+│   └── vllm_client.py
+│
 ```
 
 ### 03 - CUDA Stack
@@ -874,6 +879,159 @@ Ollama
 ```
 
 研究真正负责运行本地模型的 Inference Engine。
+
+### 08 - Local LLM Runtime
+
+对应博客：
+
+《从零搭建一个 AI Infra 实验室⑧：Ollama 与 llama.cpp——本地 LLM 推理为什么还有另一条路线》
+
+这一阶段从 Transformers / PyTorch 推理继续进入 Model Runtime，主要理解：
+
+- Model 与 Runtime 的区别
+- GGUF 与 Hugging Face Model Format 的定位差异
+- llama.cpp 的 CPU / GPU Hybrid Inference
+- GPU Offload
+- Runtime Context Size
+- Ollama 的 Model Management、Lifecycle 和 Local API
+
+核心路线：
+
+```text
+GGUF
+ ↓
+llama.cpp
+ ↓
+CPU / GPU Offload
+ ↓
+Ollama
+ ↓
+Local Model Service
+```
+
+这一阶段主要使用现成 Runtime 和 CLI，没有额外的自定义实验代码。
+
+### 09 - vLLM Serving
+
+对应博客：
+
+《从零搭建一个 AI Infra 实验室⑨：从“跑模型”到“模型服务器”——为什么需要 vLLM》
+
+这一阶段从 Local Model Runtime 继续进入 LLM Serving，主要理解：
+
+- Model Runtime 与 Model Server 的区别
+- Transformers、llama.cpp、Ollama 与 vLLM 的定位差异
+- Ollama 与 vLLM 都可以提供 API，但优化目标不同
+- OpenAI Compatible API
+- Application 与 Model Runtime 的解耦
+- vLLM Server 的基本启动方式
+- 使用 curl 调用 Chat Completions API
+- 使用 OpenAI Python SDK 调用本地 vLLM
+
+实验模型：
+
+```text
+Qwen/Qwen2.5-7B-Instruct-AWQ
+```
+
+核心架构：
+
+```text
+Application
+     │
+     │ HTTP
+     ▼
+OpenAI-Compatible API
+     │
+     ▼
+vLLM Server
+     │
+     ▼
+Inference Engine
+     │
+     ▼
+Model
+     │
+     ▼
+GPU
+```
+
+#### start_server.sh
+
+启动本地 vLLM Server：
+
+```bash
+bash 09-vllm-serving/start_server.sh
+```
+
+实验配置：
+
+```text
+Model: Qwen/Qwen2.5-7B-Instruct-AWQ
+Served Model Name: qwen2.5-7b-awq
+Host: 127.0.0.1
+Port: 8000
+Max Model Length: 4096
+GPU Memory Utilization: 0.85
+```
+
+#### curl_chat.sh
+
+使用 OpenAI Compatible API 调用本地模型：
+
+```bash
+bash 09-vllm-serving/curl_chat.sh
+```
+
+请求路径：
+
+```text
+Client
+ ↓
+POST /v1/chat/completions
+ ↓
+vLLM Server
+ ↓
+Model
+ ↓
+GPU
+ ↓
+JSON Response
+```
+
+#### vllm_client.py
+
+使用 OpenAI Python SDK 调用同一个本地 Server：
+
+```bash
+python 09-vllm-serving/vllm_client.py
+```
+
+核心变化是从：
+
+```python
+model.generate(...)
+```
+
+进入：
+
+```python
+client.chat.completions.create(...)
+```
+
+Application 不再直接拥有 Model，而是通过标准 API 调用长期运行的 Model Service。
+
+下一阶段将进一步研究：
+
+```text
+TTFT
+TPOT
+ITL
+End-to-End Latency
+Throughput
+```
+
+学习应该如何正确评价一个 LLM Server 的性能。
 
 ## About
 
