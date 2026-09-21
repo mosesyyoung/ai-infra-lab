@@ -75,6 +75,17 @@ ai-infra-lab/
 │   ├── curl_chat.sh
 │   └── vllm_client.py
 │
+├── 10-serving-benchmark/
+│   ├── README.md
+│   ├── ollama-c1.log
+│   ├── ollama-c4.log
+│   ├── ollama-c8.log
+│   ├── ollama-c16.log
+│   ├── vllm-c1.log
+│   ├── vllm-c4.log
+│   ├── vllm-c8.log
+│   └── vllm-c16.log
+│
 ```
 
 ### 03 - CUDA Stack
@@ -407,28 +418,6 @@ sudo iw dev wlp2s0 set power_save off
 
 这一问题与模型或 PyTorch 本身无直接关系，但持续下载模型文件可能会暴露原本不明显的网络稳定性问题。
 
-下一阶段将进一步观察一次 LLM 推理请求内部发生的事情：
-
-```text
-Prompt
- ↓
-Chat Template
- ↓
-Tokenizer
- ↓
-Context
- ↓
-Prefill
- ├── Build KV Cache
- └── Output Token 1
-          ↓
-       Decode
-          ↓
-   Update KV Cache
-          ↓
-   Next Output Token
-```
-
 ### 06 - LLM Inference
 
 对应博客：
@@ -645,22 +634,6 @@ Batching
 KV Cache Management
 ```
 
-下一阶段将继续研究一个非常现实的问题：
-
-```text
-12GB VRAM
-     ↓
-FP16 / BF16
-     ↓
-INT8
-     ↓
-INT4
-     ↓
-Quantization
-     ↓
-How Large a Model Can We Run?
-```
-
 ### 07 - LLM Quantization
 
 对应博客：
@@ -866,20 +839,6 @@ Serving Fits
 
 长 Context 和更高并发仍然会继续增加 KV Cache 等显存开销。
 
-下一阶段将进入：
-
-```text
-GGUF
- ↓
-llama.cpp
- ↓
-CPU / GPU Offload
- ↓
-Ollama
-```
-
-研究真正负责运行本地模型的 Inference Engine。
-
 ### 08 - Local LLM Runtime
 
 对应博客：
@@ -1021,17 +980,130 @@ client.chat.completions.create(...)
 
 Application 不再直接拥有 Model，而是通过标准 API 调用长期运行的 Model Service。
 
-下一阶段将进一步研究：
+
+### 10 - LLM Serving Benchmark
+
+对应博客：
+
+《从零搭建一个 AI Infra 实验室⑩：LLM 性能怎么看——TTFT、TPOT、ITL 和 Throughput》
+
+这一阶段从“如何把模型变成 Server”进一步进入 LLM Serving Performance，主要理解：
+
+- TTFT（Time To First Token）
+- TPOT（Time Per Output Token）
+- ITL（Inter-Token Latency）
+- End-to-End Latency
+- Request Throughput
+- Output Tokens/s
+- P50 / P95 / P99 与 Tail Latency
+- Concurrency 与 Latency / Throughput 的关系
+
+实验继续使用：
 
 ```text
-TTFT
-TPOT
-ITL
-End-to-End Latency
-Throughput
+Ubuntu 24.04 Server
+Intel Core i5-10400F
+32GB RAM
+NVIDIA GeForce RTX 3060 12GB
 ```
 
-学习应该如何正确评价一个 LLM Server 的性能。
+使用同一个：
+
+```text
+vllm bench serve
+```
+
+作为 Benchmark Client，对：
+
+```text
+Ollama
+vLLM
+```
+
+分别进行：
+
+```text
+Concurrency
+1
+4
+8
+16
+```
+
+四档测试。
+
+实验控制：
+
+```text
+Input Length ≈ 512 Tokens
+Output Length ≈ 128 Tokens
+Requests = 100
+Request Rate = inf
+```
+
+主要观察两类指标：
+
+```text
+User Experience
+├── TTFT
+├── TPOT
+├── ITL
+└── E2E Latency
+
+System Capacity
+├── Requests/s
+└── Output Tokens/s
+```
+
+实验结果显示，在 Concurrency=1 时，两种 Runtime 的 Output Throughput 比较接近：
+
+```text
+Ollama : 55.91 tokens/s
+vLLM   : 57.51 tokens/s
+```
+
+随着并发提高，两者的 Scaling Behavior 开始明显不同。
+
+```text
+Output Tokens/s
+
+Concurrency     Ollama      vLLM
+1               55.91       57.51
+4               53.39      161.08
+8               51.41      228.58
+16              49.90      287.27
+```
+
+同时，TTFT、TPOT、ITL 和 Tail Latency 也会随着并发产生不同变化。
+
+这说明评价一个 LLM Server 不能只看单请求 tokens/s，而需要同时观察：
+
+```text
+Latency
++
+Throughput
++
+Concurrency
++
+Percentile
+```
+
+原始 Benchmark 输出保存在：
+
+```text
+10-serving-benchmark/
+```
+
+其中：
+
+```text
+ollama-c*.log
+vllm-c*.log
+```
+
+分别对应 Ollama 和 vLLM 在不同并发下的完整 Benchmark 输出。
+
+Note: 本次 vLLM Benchmark 过程中，实验服务器出现过偶发的整机卡死/重启，因此本次 vLLM 实验的 Concurrency=1、4、8、16 的结果来自多次实验中分别完成的成功测试，并非一次连续 Benchmark Run。当前硬件稳定性问题仍在进一步排查，因此这些数据主要用于学习和观察 Scaling Behavior，而不是严格的硬件性能基准。
 
 ## About
 
