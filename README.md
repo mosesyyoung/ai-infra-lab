@@ -86,6 +86,13 @@ ai-infra-lab/
 │   ├── vllm-c8.log
 │   └── vllm-c16.log
 │
+├── 11-vllm-internals/
+│   ├── README.md
+│   ├── context/
+│   ├── concurrency/
+│   ├── scheduler/
+│   └── prefix-cache/
+│
 ```
 
 ### 03 - CUDA Stack
@@ -1104,6 +1111,112 @@ vllm-c*.log
 分别对应 Ollama 和 vLLM 在不同并发下的完整 Benchmark 输出。
 
 Note: 本次 vLLM Benchmark 过程中，实验服务器出现过偶发的整机卡死/重启，因此本次 vLLM 实验的 Concurrency=1、4、8、16 的结果来自多次实验中分别完成的成功测试，并非一次连续 Benchmark Run。当前硬件稳定性问题仍在进一步排查，因此这些数据主要用于学习和观察 Scaling Behavior，而不是严格的硬件性能基准。
+
+### 11 - vLLM Internals and Scheduling
+
+对应博客：
+
+《从零搭建一个 AI Infra 实验室⑪：vLLM 为什么快——KV Cache、PagedAttention 与 Continuous Batching》
+
+这一阶段从 LLM Serving Performance 继续进入 vLLM 内部机制，主要理解：
+
+- KV Cache
+- PagedAttention
+- Scheduler
+- Continuous Batching
+- Prefill / Decode
+- Prefix Caching
+- Chunked Prefill
+- Client Concurrency 与 Server Scheduling Capacity 的区别
+
+实验继续使用：
+
+```text
+Ubuntu 24.04 Server
+Intel Core i5-10400F
+32GB RAM
+NVIDIA GeForce RTX 3060 12GB
+```
+
+模型：
+
+```text
+Qwen/Qwen2.5-7B-Instruct-AWQ
+```
+
+这一阶段不再比较 Ollama 与 vLLM，而是固定 vLLM，只改变：
+
+```text
+Context Length
+Concurrency
+max-num-seqs
+Prefix Caching
+```
+
+观察：
+
+```text
+TTFT
+TPOT
+ITL
+Output Throughput
+```
+
+核心关系：
+
+```text
+Requests
+   ↓
+Scheduler
+   ↓
+Prefill / Decode
+   ↓
+Continuous Batching
+   ↓
+KV Cache
+   ↓
+PagedAttention
+   ↓
+GPU
+```
+
+实验主要得到以下趋势：
+
+```text
+Longer Context
+→ Prefill Work ↑
+→ TTFT ↑
+
+Higher Concurrency
+→ Effective Batch ↑
+→ Throughput ↑
+→ Latency / Tail Latency 也可能 ↑
+
+max-num-seqs ↑
+→ Scheduling Capacity ↑
+→ Waiting 减少
+→ Throughput ↑
+→ Decode Tail Latency 可能恶化
+
+Prefix Cache Hit
+→ 重复 Prefill 大幅减少
+→ TTFT 明显下降
+→ TPOT 基本不变
+```
+
+原始 Benchmark 输出保存在：
+
+```text
+11-vllm-internals/
+├── context/
+├── concurrency/
+├── scheduler/
+└── prefix-cache/
+```
+
+实验结果主要用于观察参数变化与性能趋势。
+
+Note: 本次 vLLM Benchmark 过程中，实验服务器出现过偶发整机卡死/重启，因此各组结果并非一次连续 Benchmark Run 完成，而是在多次实验中分别取得完整结果。当前稳定性问题仍在进一步排查，因此这些数据不作为严格的硬件性能基准。
 
 ## About
 
