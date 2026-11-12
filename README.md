@@ -1237,6 +1237,15 @@ Note: 本次 vLLM Benchmark 过程中，实验服务器出现过偶发整机卡�
 
 Note: 14、16、17、18 目录中的 YAML 文件为对应博客的 Kubernetes 实验配置，仅供学习和参考。实际部署时需根据集群环境调整相关配置，并非开箱即用的完整部署方案。
 
+### Recent Experiments (19–24)
+
+- `19-autoscaling/` — KServe HPA, Metrics Server and cold-start experiments
+- `20-ai-gateway/` — AI Gateway, model routing and request limits
+- `21-llm-d/` — Routing policies and traffic distribution tests
+- `22-kuberay/` — KubeRay and Ray Serve CPU-only demonstration
+- `23-observability/` — DCGM Exporter, Prometheus and vLLM metrics
+- `24-benchmark/` — Ollama, llama.cpp and vLLM benchmark results
+
 ## About
 
 这个项目主要用于个人学习和实验。

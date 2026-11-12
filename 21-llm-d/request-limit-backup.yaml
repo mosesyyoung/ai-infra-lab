@@ -1,0 +1,43 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"agentgateway.dev/v1alpha1","kind":"AgentgatewayPolicy","metadata":{"annotations":{},"name":"request-limit","namespace":"ai-gateway"},"spec":{"targetRefs":[{"group":"gateway.networking.k8s.io","kind":"HTTPRoute","name":"qwen-router"}],"traffic":{"rateLimit":{"local":[{"requests":5,"unit":"Minutes"}]}}}}
+  creationTimestamp: "2026-10-29T12:25:44Z"
+  generation: 1
+  name: request-limit
+  namespace: ai-gateway
+  resourceVersion: "363553"
+  uid: 9e83bee4-a6cc-4371-b2fa-f5a1e6f05d61
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: qwen-router
+  traffic:
+    rateLimit:
+      local:
+      - requests: 5
+        unit: Minutes
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: inference-gateway
+      namespace: ai-gateway
+    conditions:
+    - lastTransitionTime: "2026-10-29T12:25:44Z"
+      message: Policy accepted
+      observedGeneration: 1
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: "2026-10-29T12:25:44Z"
+      message: Attached to all targets
+      observedGeneration: 1
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

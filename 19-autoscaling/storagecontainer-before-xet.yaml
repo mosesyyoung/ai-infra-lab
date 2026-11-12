@@ -1,0 +1,56 @@
+apiVersion: serving.kserve.io/v1alpha1
+kind: ClusterStorageContainer
+metadata:
+  annotations:
+    meta.helm.sh/release-name: kserve-resources
+    meta.helm.sh/release-namespace: kserve
+  creationTimestamp: "2026-10-20T13:59:49Z"
+  generation: 2
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  name: default
+  resourceVersion: "175194"
+  uid: 9702bbeb-7f78-48c2-9334-53cb05c38aea
+spec:
+  container:
+    env:
+    - name: HTTP_PROXY
+      value: http://PROXY_IP:PROXY_PORT
+    - name: HTTPS_PROXY
+      value: http://PROXY_IP:PROXY_PORT
+    - name: http_proxy
+      value: http://PROXY_IP:PROXY_PORT
+    - name: https_proxy
+      value: http://PROXY_IP:PROXY_PORT
+    - name: NO_PROXY
+      value: 127.0.0.1,localhost,192.168.31.0/24,10.96.0.0/12,10.244.0.0/16,.svc,.cluster.local
+    - name: no_proxy
+      value: 127.0.0.1,localhost,192.168.31.0/24,10.96.0.0/12,10.244.0.0/16,.svc,.cluster.local
+    image: kserve/storage-initializer:v0.20.0
+    imagePullPolicy: IfNotPresent
+    name: storage-initializer
+    resources:
+      limits:
+        cpu: "1"
+        memory: 1Gi
+      requests:
+        cpu: 100m
+        memory: 100Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      privileged: false
+      runAsNonRoot: true
+  supportedUriFormats:
+  - prefix: gs://
+  - prefix: s3://
+  - prefix: hdfs://
+  - prefix: hf://
+  - prefix: webhdfs://
+  - regex: https://(.+?).blob.core.windows.net/(.+)
+  - regex: https://(.+?).file.core.windows.net/(.+)
+  - regex: https?://(.+)/(.+)
+  supportsMultiModelDownload: true
+  workloadType: initContainer

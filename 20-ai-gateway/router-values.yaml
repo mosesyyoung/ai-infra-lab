@@ -1,0 +1,23 @@
+router:
+  modelServers:
+    matchLabels:
+      app: qwen-sim
+    type: vllm
+    targetPorts:
+      - number: 8000
+
+  epp:
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
+
+provider:
+  name: none
+
+httpRoute:
+  create: true
+  inferenceGatewayName: inference-gateway
+  requestTimeout: 300s

@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: qwen-vllm-metrics
+  namespace: ai-infra
+  labels:
+    app: qwen-vllm-metrics
+spec:
+  selector:
+    serving.kserve.io/inferenceservice: qwen-kserve
+
+  ports:
+    - name: http-metrics
+      port: 8080
+      targetPort: 8080
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: qwen-vllm
+  namespace: ai-infra
+spec:
+  namespaceSelector:
+    matchNames:
+      - ai-infra
+
+  selector:
+    matchLabels:
+      app: qwen-vllm-metrics
+
+  endpoints:
+    - port: http-metrics
+      path: /metrics
+      interval: 15s

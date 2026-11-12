@@ -1,0 +1,104 @@
+apiVersion: ray.io/v1
+kind: RayService
+
+metadata:
+  name: rayservice-demo
+  namespace: ray-lab
+
+spec:
+
+  serveConfigV2: |
+    applications:
+      - name: ray-demo
+        route_prefix: /
+        import_path: serve_app:app
+
+        deployments:
+          - name: WorkerInfo
+            num_replicas: 2
+            max_replicas_per_node: 1
+            ray_actor_options:
+              num_cpus: 0.5
+
+  rayClusterConfig:
+
+    rayVersion: "2.52.0"
+
+    headGroupSpec:
+
+      rayStartParams:
+        dashboard-host: "0.0.0.0"
+        num-cpus: "0"
+
+      template:
+        spec:
+          containers:
+            - name: ray-head
+              image: rayproject/ray:2.52.0
+
+              ports:
+                - containerPort: 6379
+                  name: gcs
+                - containerPort: 8265
+                  name: dashboard
+                - containerPort: 8000
+                  name: serve
+
+              env:
+                - name: PYTHONPATH
+                  value: /home/ray/app
+
+              resources:
+                requests:
+                  cpu: "500m"
+                  memory: "1Gi"
+                limits:
+                  cpu: "1"
+                  memory: "2Gi"
+
+              volumeMounts:
+                - name: app-code
+                  mountPath: /home/ray/app
+
+          volumes:
+            - name: app-code
+              configMap:
+                name: ray-serve-code
+
+    workerGroupSpecs:
+
+      - groupName: cpu-workers
+
+        replicas: 2
+        minReplicas: 2
+        maxReplicas: 2
+
+        rayStartParams:
+          num-cpus: "1"
+
+        template:
+          spec:
+            containers:
+              - name: ray-worker
+                image: rayproject/ray:2.52.0
+
+                env:
+                  - name: PYTHONPATH
+                    value: /home/ray/app
+
+                resources:
+                  requests:
+                    cpu: "1"
+                    memory: "1Gi"
+                  limits:
+                    cpu: "1"
+                    memory: "2Gi"
+
+                volumeMounts:
+                  - name: app-code
+                    mountPath: /home/ray/app
+
+            volumes:
+              - name: app-code
+                configMap:
+                  name: ray-serve-code

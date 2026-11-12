@@ -1,0 +1,87 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"serving.kserve.io/v1beta1","kind":"InferenceService","metadata":{"annotations":{},"name":"qwen-kserve","namespace":"ai-infra"},"spec":{"predictor":{"model":{"args":["--model_name=qwen","--backend=vllm","--max_model_len=2048","--gpu_memory_utilization=0.80","--enforce_eager"],"modelFormat":{"name":"huggingface"},"resources":{"limits":{"cpu":"2","memory":"6Gi","nvidia.com/gpu":"1"},"requests":{"cpu":"1","memory":"4Gi","nvidia.com/gpu":"1"}},"runtime":"kserve-huggingfaceserver","storageUri":"hf://Qwen/Qwen2.5-0.5B-Instruct"}}}}
+    modelFormat: huggingface
+    serving.kserve.io/autoscalerClass: hpa
+    serving.kserve.io/deploymentMode: Standard
+  creationTimestamp: "2026-10-20T14:24:52Z"
+  finalizers:
+  - inferenceservice.finalizers
+  generation: 3
+  name: qwen-kserve
+  namespace: ai-infra
+  resourceVersion: "265092"
+  uid: 6768dabe-7f3a-4fc5-b59f-a5ff3592f8c6
+spec:
+  predictor:
+    deploymentStrategy:
+      type: Recreate
+    maxReplicas: 2
+    minReplicas: 1
+    model:
+      args:
+      - --model_name=qwen
+      - --backend=vllm
+      - --max_model_len=2048
+      - --gpu_memory_utilization=0.80
+      - --enforce_eager
+      modelFormat:
+        name: huggingface
+      name: ""
+      resources:
+        limits:
+          cpu: "2"
+          memory: 6Gi
+          nvidia.com/gpu: "1"
+        requests:
+          cpu: "1"
+          memory: 4Gi
+          nvidia.com/gpu: "1"
+      runtime: kserve-huggingfaceserver
+      storageUri: hf://Qwen/Qwen2.5-0.5B-Instruct
+    scaleMetric: cpu
+    scaleTarget: 50
+status:
+  address:
+    url: http://qwen-kserve-predictor.ai-infra.svc.cluster.local
+  clusterServingRuntimeName: kserve-huggingfaceserver
+  components:
+    predictor:
+      url: http://qwen-kserve-predictor-ai-infra.example.com
+  conditions:
+  - lastTransitionTime: "2026-10-28T14:20:13Z"
+    status: "True"
+    type: IngressReady
+  - lastTransitionTime: "2026-10-28T14:20:13Z"
+    message: ReplicaSet "qwen-kserve-predictor-574f569bdc" has successfully progressed.
+    reason: NewReplicaSetAvailable
+    status: "True"
+    type: PredictorReady
+  - lastTransitionTime: "2026-10-28T14:20:13Z"
+    status: "True"
+    type: Ready
+  - lastTransitionTime: "2026-10-20T14:24:52Z"
+    severity: Info
+    status: "False"
+    type: Stopped
+  deploymentMode: Standard
+  modelStatus:
+    copies:
+      failedCopies: 0
+      totalCopies: 1
+    lastFailureInfo:
+      exitCode: 137
+      message: |
+        2026-10-28 13:07:43.897 1 storage.initializer INFO [initializer-entrypoint:<module>():17] Initializing, args: (src_uri, dest_path): [('hf://Qwen/Qwen2.5-0.5B-Instruct', '/mnt/models')]
+        2026-10-28 13:07:43.898 1 storage.initializer INFO [kserve_storage.py:download():168] Copying contents of hf://Qwen/Qwen2.5-0.5B-Instruct to local
+        Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+      reason: ModelLoadFailed
+    states:
+      activeModelState: Loaded
+      targetModelState: Loaded
+    transitionStatus: UpToDate
+  observedGeneration: 7
+  url: http://qwen-kserve-ai-infra.example.com
